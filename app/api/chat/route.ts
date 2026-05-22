@@ -68,9 +68,14 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        // Log full error server-side for debugging, but NEVER echo error
+        // messages to the client — they can contain env-var contents, header
+        // values, or API keys. Return a generic, non-leaky string.
+        console.error("[/api/chat] streaming error:", err);
         controller.enqueue(
-          new TextEncoder().encode(`\n\n[Assistant error: ${message}]`),
+          new TextEncoder().encode(
+            "\n\n[Assistant error: response could not be completed. Check server logs.]",
+          ),
         );
       } finally {
         controller.close();
