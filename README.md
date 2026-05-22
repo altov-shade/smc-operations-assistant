@@ -46,16 +46,44 @@ For best caching behavior, avoid editing the KB on every request — Anthropic's
 
 ## Deploying to Vercel
 
-This is a standard Next.js project — deploy works out of the box.
+The project is already wired for Vercel — no `vercel.json` needed. Build settings, runtime, and file tracing are configured in `next.config.mjs`.
 
-1. Push the directory to a new GitHub repo:
-   ```bash
-   git init && git add . && git commit -m "Initial commit"
-   gh repo create smc-operations-assistant --private --source=. --push
-   ```
-2. In Vercel, **Import Project** → select the repo.
-3. Under **Environment Variables**, add `ANTHROPIC_API_KEY`.
-4. Deploy. No build config changes needed.
+### Dashboard import (recommended)
+
+1. Go to <https://vercel.com/new> and sign in.
+2. Click **Import Git Repository** → pick `altov-shade/smc-operations-assistant`. Vercel auto-detects:
+   - Framework: **Next.js**
+   - Build command: `next build`
+   - Output directory: `.next`
+   - Install command: `npm install`
+   Leave all of these on their defaults.
+3. Expand **Environment Variables** and add:
+   | Name | Value | Environments |
+   |---|---|---|
+   | `ANTHROPIC_API_KEY` | `sk-ant-...` (your real key) | Production, Preview, Development |
+4. Click **Deploy**. First build takes ~1–2 minutes.
+5. Once deployed, open the URL and ask a question — if the chat responds with cited sections, everything is wired up.
+
+### What's already configured for you
+
+- **Node 20+** pinned in `package.json` `engines` (Vercel auto-selects a matching runtime).
+- **KB markdown files are traced** into the `/api/chat` serverless function via `outputFileTracingIncludes` in `next.config.mjs` — `fs.readFileSync` works in production without any extra config.
+- **Streamed responses** use the standard Node runtime (`app/api/chat/route.ts` sets `runtime = "nodejs"`). This works on Vercel's default serverless functions; no Edge runtime opt-in required.
+- **`.env.local` is gitignored** — your API key is never committed.
+
+### After the first deploy
+
+- **Rotate the API key**: anytime you regenerate the Anthropic key, update it under **Project → Settings → Environment Variables**, then redeploy (Settings → Deployments → Redeploy).
+- **Custom domain**: Project → Settings → Domains.
+- **Logs**: Project → Logs (real-time function logs, useful for debugging 401s from Anthropic).
+
+### Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| `ANTHROPIC_API_KEY is not configured` | Env var missing in Vercel project; set it and redeploy |
+| `ENOENT: knowledge-base/...md` | `outputFileTracingIncludes` was removed from `next.config.mjs` — restore it |
+| Chat starts streaming then stops | Anthropic key may be expired or rate-limited; check Vercel logs |
 
 ## Embedding as a dashboard card
 
