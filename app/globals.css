@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: #f8fafc;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.smc-prose pre,
+.smc-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.smc-prose pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: #0f172a;
+}
