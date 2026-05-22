@@ -13,11 +13,29 @@ type IncomingMessage = {
   content: string;
 };
 
+function configError(reason: string) {
+  console.error(`[/api/chat] config error: ${reason}`);
+  return new Response(
+    JSON.stringify({
+      error:
+        "The assistant is not configured correctly. Please contact the site administrator.",
+    }),
+    { status: 503, headers: { "Content-Type": "application/json" } },
+  );
+}
+
 export async function POST(req: NextRequest) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return new Response(
-      JSON.stringify({ error: "ANTHROPIC_API_KEY is not configured on the server." }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
+  const rawKey = process.env.ANTHROPIC_API_KEY;
+  if (!rawKey) return configError("ANTHROPIC_API_KEY missing");
+
+  const apiKey = rawKey.trim();
+  // Anthropic keys are `sk-ant-` + alphanumerics + dashes/underscores. No whitespace.
+  // Anything else (curl commands, full headers, multi-line blobs, quotes) is rejected
+  // before reaching the SDK, where a malformed header value would otherwise throw an
+  // error that includes the malformed value itself.
+  if (!/^sk-ant-[A-Za-z0-9_-]+$/.test(apiKey)) {
+    return configError(
+      "ANTHROPIC_API_KEY does not match the expected key format",
     );
   }
 
@@ -39,7 +57,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = new Anthropic({ apiKey });
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {

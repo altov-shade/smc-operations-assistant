@@ -571,7 +571,22 @@ function ResponsePanel({
   content: string;
   streaming: boolean;
 }) {
-  const parsed = useMemo(() => parseResponse(content), [content]);
+  // Defense-in-depth: if the streamed content matches a known-unsafe pattern
+  // (API keys, raw curl commands, HTTP header flags, stack traces, raw JSON
+  // payloads), drop the content entirely and show a clean fallback. This
+  // catches anything the backend might have leaked due to a misconfiguration,
+  // even if the bad content is sitting in stale client state from a prior
+  // request.
+  const unsafe = useMemo(() => looksLikeLeakedDebugOutput(content), [content]);
+
+  const parsed = useMemo(
+    () => (unsafe ? { sections: [] } : parseResponse(content)),
+    [content, unsafe],
+  );
+
+  if (unsafe) {
+    return <FallbackResponsePanel />;
+  }
 
   return (
     <article className="relative rounded-lg bg-smc-surface/85 border border-smc-line shadow-panel overflow-hidden">
@@ -676,6 +691,61 @@ function Cursor() {
       className="inline-block w-[6px] h-[14px] align-[-2px] ml-0.5 bg-smc-gold animate-pulse"
     />
   );
+}
+
+function FallbackResponsePanel() {
+  return (
+    <article className="relative rounded-lg bg-smc-surface/85 border border-smc-confEsc/25 shadow-panel overflow-hidden">
+      <div
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-smc-confEsc/40 to-transparent"
+      />
+      <div className="px-5 sm:px-7 py-4 border-b border-smc-line flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span
+            className="h-1.5 w-1.5 rounded-full bg-smc-confEsc"
+            aria-hidden
+          />
+          <p className="text-[10px] tracking-[0.24em] uppercase text-smc-confEsc font-semibold">
+            Response Unavailable
+          </p>
+        </div>
+        <span className="inline-flex items-center gap-2 rounded-md border border-smc-confEsc/40 bg-smc-confEsc/10 px-2.5 py-1 text-[10px] tracking-[0.22em] uppercase font-semibold font-mono text-smc-confEsc">
+          <span className="h-1.5 w-1.5 rounded-full bg-smc-confEsc" />
+          Confidence · Escalate
+        </span>
+      </div>
+      <div className="px-5 sm:px-7 py-6 space-y-3">
+        <p className="text-[14px] text-smc-cream leading-relaxed">
+          The assistant could not return operational guidance for this query.
+        </p>
+        <p className="text-[13px] text-smc-creamMuted leading-relaxed">
+          This usually means the backend rejected the request or the
+          configuration is incomplete. Submit a new query above to retry, or
+          contact the site administrator if the issue persists.
+        </p>
+      </div>
+    </article>
+  );
+}
+
+/* ---------- Defense-in-depth content sanitizer ---------- */
+
+const LEAK_PATTERNS: RegExp[] = [
+  /sk-ant-[A-Za-z0-9_-]{8,}/i, // Anthropic API key
+  /\bcurl\s+(?:-|https?:\/\/)/i, // curl invocation
+  /--header\s+["']/i, // curl --header flag
+  /\s-H\s+["'][^"']+:/i, // curl -H short flag with header
+  /["']x-api-key["']\s*:/i, // raw header JSON
+  /["']anthropic-version["']\s*:/i, // raw API request payload
+  /Headers\.append/i, // fetch internal error
+  /\bat\s+[\w$.<>]+\s+\([^)]+:\d+:\d+\)/, // stack trace frame
+  /\bTypeError:|\bSyntaxError:|\bReferenceError:/i, // raw error class
+];
+
+function looksLikeLeakedDebugOutput(text: string): boolean {
+  if (!text) return false;
+  return LEAK_PATTERNS.some((re) => re.test(text));
 }
 
 /* ---------- Response parsing & rendering ---------- */
